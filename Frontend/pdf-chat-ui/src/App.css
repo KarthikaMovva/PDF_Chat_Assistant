@@ -1,0 +1,124 @@
+/* Global */
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f4f6f8;
+}
+
+/* Main container */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Header */
+.header {
+  background: #1f2937;
+  color: white;
+  padding: 15px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+/* Upload section */
+.upload-section {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  justify-content: center;
+  background: white;
+  border-bottom: 1px solid #ddd;
+}
+
+.upload-section input {
+  padding: 5px;
+}
+
+.upload-section button {
+  padding: 8px 14px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.upload-section button:disabled {
+  background: gray;
+}
+
+/* Chat box */
+.chat-box {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Messages */
+.message {
+  padding: 10px 14px;
+  border-radius: 10px;
+  max-width: 60%;
+  word-wrap: break-word;
+}
+
+/* User message */
+.user {
+  background: #2563eb;
+  color: white;
+  align-self: flex-end;
+}
+
+/* Bot message */
+.bot {
+  background: white;
+  border: 1px solid #ddd;
+  align-self: flex-start;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  color: gray;
+  margin-top: 50px;
+}
+
+/* Loading */
+.loading {
+  font-style: italic;
+  color: gray;
+}
+
+/* Input box */
+.input-box {
+  display: flex;
+  padding: 10px;
+  background: white;
+  border-top: 1px solid #ddd;
+  gap: 10px;
+}
+
+.input-box input {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.input-box button {
+  padding: 10px 16px;
+  background: #16a34a;
+  color: white;
+  border: none;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.input-box button:hover {
+  background: #15803d;
+}
