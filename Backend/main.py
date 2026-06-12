@@ -1,21 +1,18 @@
-import os
-import uuid
-import numpy as np
-import faiss
-
 from fastapi import FastAPI, UploadFile, File
-from pydantic import BaseModel
-from dotenv import load_dotenv
-
-from pypdf import PdfReader
-from sentence_transformers import SentenceTransformer
-
-import google.generativeai as genai
-
 from fastapi.middleware.cors import CORSMiddleware
+
+from models.schemas import QuestionRequest
+from services.pdf_service import extract_text
+from services.embedding_service import create_embeddings
+from services.vector_store import VectorStore
+from services.rag_service import get_answer
+
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from utils.file_utils import save_file, delete_file
 
 app = FastAPI()
 
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -24,130 +21,57 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# GLOBAL VECTOR STORE
+vector_store = VectorStore()
 
-genai.configure(api_key=GEMINI_API_KEY)
+# CHUNKER
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=800,
+    chunk_overlap=150
+)
 
-gemini_model = genai.GenerativeModel("gemini-2.5-flash")
-
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-
-stored_chunks = []
-stored_index = None
-
-class QuestionRequest(BaseModel):
-    question: str
-
-def extract_text(pdf_path):
-    reader = PdfReader(pdf_path)
-    text = ""
-
-    for page in reader.pages:
-        page_text = page.extract_text()
-        if page_text:
-            text += page_text
-
-    return text
-
-
-def chunk_text(text, chunk_size=500):
-    return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
-
-
-def create_embeddings(chunks):
-    return embedding_model.encode(chunks)
-
-
-def create_faiss_index(embeddings):
-    dimension = embeddings.shape[1]
-    index = faiss.IndexFlatL2(dimension)
-    index.add(np.array(embeddings).astype("float32"))
-    return index
-
-# Routes
+# HOME
 @app.get("/")
 def home():
-    return {"message": "RAG API is working 🚀"}
+    return {"message": "RAG API Running 🚀"}
 
 # UPLOAD PDF
 @app.post("/upload")
 async def upload_pdf(file: UploadFile = File(...)):
 
-    global stored_chunks
-    global stored_index
+    content = await file.read()
+    filename = save_file(content)
 
-    # Safe filename
-    filename = f"{uuid.uuid4()}.pdf"
-
-    with open(filename, "wb") as f:
-        f.write(await file.read())
-
-    # Extract text
     text = extract_text(filename)
+    chunks = splitter.split_text(text)
 
-    # Chunking
-    chunks = chunk_text(text)
-
-    # Embeddings
     embeddings = create_embeddings(chunks)
 
-    # FAISS index
-    index = create_faiss_index(embeddings)
+    vector_store.build_index(embeddings, chunks)
 
-    # Store globally
-    stored_chunks = chunks
-    stored_index = index
-
-    # cleanup file (optional)
-    os.remove(filename)
+    delete_file(filename)
 
     return {
         "message": "PDF processed successfully",
-        "total_chunks": len(chunks)
+        "chunks": len(chunks)
     }
 
 # ASK QUESTION
 @app.post("/ask")
 async def ask_question(request: QuestionRequest):
 
-    global stored_chunks
-    global stored_index
+    if not vector_store.index:
+        return {"error": "Upload PDF first"}
 
-    if stored_index is None:
-        return {"error": "Upload a PDF first"}
+    query_embedding = create_embeddings([request.question])
 
-    # Query embedding
-    query_embedding = embedding_model.encode([request.question])
+    context_chunks = vector_store.search(query_embedding, top_k=3)
 
-    # FAISS search
-    distances, indices = stored_index.search(
-        np.array(query_embedding).astype("float32"),
-        3
-    )
+    context = "\n\n".join(context_chunks)
 
-    # Build context
-    context = ""
-    for idx in indices[0]:
-        context += stored_chunks[idx] + "\n\n"
-
-    # Prompt for Gemini
-    prompt = f"""
-You are a helpful assistant.
-
-Answer ONLY using the context below.
-
-Context:
-{context}
-
-Question:
-{request.question}
-
-If the answer is not in the context, say "Not found in document".
-"""
-
-    response = gemini_model.generate_content(prompt)
+    answer = get_answer(context, request.question)
 
     return {
-        "answer": response.text
+        "answer": answer,
+        "context_used": context_chunks
     }
